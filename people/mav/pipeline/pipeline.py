@@ -100,6 +100,7 @@ def is_fanout(component):
     return open_arity(component.get('outputs', []))
 
 def is_fanin(component):
+    print(f'**** is_fanin inputs: {component.get("inputs", [])}')
     return open_arity(component.get('inputs', []))
 
 def is_group(component):
@@ -404,8 +405,22 @@ class CAS:
         if len(self.content) == 0:
             print('[dim italic white]Nothing to see here, move along[/]\n')
             return
+
+        global console
+
+        table = Table(title = 'Content-Addressable Storage', show_header=True, header_style="bold magenta", box=box.SIMPLE_HEAVY)
+        table.add_column("sha", style="dim", width=12)
+        table.add_column("content")
+
         for k, v in self.content.items():
-            print(f'[bold red]{k[:8]}[/]\t[italic white]{v}[/]')
+            table.add_row(k[:8].decode(), Syntax(str(v), 'python', theme='ansi_dark'))
+        #     print(f'[bold red]{k[:8]}[/]\t[italic white]{v}[/]')
+
+        # for id, l in self.labels.items():
+        #     table.add_row(id, ", ".join(l['tags']), ", ".join(l['labels']))
+
+        console.print(table)
+
 
 base_parser = cmd2.Cmd2ArgumentParser()
 become_parser = cmd2.Cmd2ArgumentParser() # base_parser.add_parser('become', help='Change persona')
@@ -576,26 +591,27 @@ class MotionPlanningREPL(cmd2.Cmd):
     # TASKS
     def task_generate(self, config):
         result = []
-        for name, label in sorted(self.labels.items()):
+#        print(self.labels)
+        for name, label in self.labels.items():
             if config['labels'] in label['tags']:
                 label['log'] = name
                 result.append(label)
         return result
 
     def task_snippet(self, config, snippet):
-        result = f"log for snippet {snippet['log']}"
+        result = { "kind": "log", "source": snippet['log'] }
         return result
 
     def task_t1_extract(self, config, log):
-        result = f'T1 from {log}'
+        result = { "kind": "table", "source": log}
         return result
 
     def task_t2_extract(self, config, log):
-        result = f'T1 from {log}'
+        result = { "kind": "table", "source": log}
         return result
 
     def task_t1_aggregate(self, config, table):
-        result = 'Aggregated T1'
+        result = f'Aggregated {table}'
         return result
 
     def task_t2_aggregate(self, config, table):
@@ -761,35 +777,46 @@ class MotionPlanningREPL(cmd2.Cmd):
 
     def get_task_inputs(self, task):
 #        print('-- getting inputs --')
-        is_fanin = task.get('wait', False)
+
         inputs = {}
+        # very ad hoc, we really assume one input on fanout successors
         for i, input in enumerate(task.get('inputs', [])):
-            if is_fanin:
-                task_index = i
-            else:
-                task_index = task.get("index")
-            hash = self.get_output_hash(input["producer"], task_index)
+            task_index = task.get("index")
+            producer = input["producer"]
+            hash = self.get_output_hash(producer)
+            indexed_result = is_fanout(producer) is not None
 #            print(f'{input["name"]} @ {hash}')
             input_value = self.cas.get(hash)
-#            print(input)
-            inputs[input["name"]] = input_value
-#            print(f'producer {i["producer"]["name"]}')
-#            print('>>> ', i['producer']['name'], i['producer']['hash'])
-#        print('-- done getting inputs --')
+            if is_fanout(producer) is not None:
+                inputs[input["name"]] = input_value[task_index]
+            else:
+                print(f'**** {task["name"]} is_fanin: {is_fanin(task)}')
+                if is_fanin(task) is not None:
+                    print(f'**** APPENDING {inputs[input["name"]]}')
+                    inputs[input["name"]].append(input_value)
+                else:
+                    inputs[input["name"]] = input_value
+#        print(inputs)
         return inputs
 
     def run_task(self, task):
         task_index = task.get('index')
-        output_hash = self.get_output_hash(task, task_index)
+#        print('=== get output_hash (skip test) for {task["name"]} ===')
+        output_hash = self.get_output_hash(task)
+#        print('=== end output_hash ===')
         task_name = task.get("implementation")
 
         config = task.get("config")
 
         inputs = self.get_task_inputs(task)
-#        print(inputs)
+        if task["name"] == "t1-aggregate":
+            print('------')
+            print(task['name'])
+            print(inputs)
+            print('------')
 
-        if task['name'] == 'snippet:0':
-            print(f'Here, we look for a run with hash {output_hash}, index: {task_index}')
+#        if task['name'] == 'snippet:0':
+#            print(f'Here, we look for a run with hash {output_hash}, index: {task_index}')
 
         result = self.cas.get(output_hash)
         if task.get('volatile', False) or result is None:
@@ -799,7 +826,9 @@ class MotionPlanningREPL(cmd2.Cmd):
             assert args.keys() == inputs.keys(), f"Bad arguments for task {args.keys()} - {inputs.keys()}"
             log.debug(f'Running {task_name} \[image: {task["image"]} config: {config}]')
             result = implementation(self, config, **inputs)
+#            print('=== get output_hash (output storage) ===')
             self.record_asset(task, result)
+#            print('=== end output_hash ===')
         else:
             print(f':satisfied: [dim]not running [strike blue]{task["name"]}[/] {output_hash}')
             log.debug('Running skipped, reusing cached results')
@@ -838,6 +867,7 @@ class MotionPlanningREPL(cmd2.Cmd):
                 new_input['producer'] = deferred_task_instances[-1]
                 new_input['reference'] = None # complicated to set here and we probably don't need it either
                 fanin['inputs'].append(new_input)
+                print(f'**** {fanin["name"]} inputs: {[(i["name"], i["producer"]["name"]) for i in fanin["inputs"]]}')
 #            print(f'--- [bold red] {len(fanin["inputs"])} [/] {fanin["inputs"]} [green] {fanin["inputs"][0].keys()} [/] ---')
             print(f':calendar: Adding blockers for {deferred_tasks["notify"]["name"]}: {deferred_tasks["tasks"][-1]["name"]}:0..{len(result)-1}')
             for t in deferred_task_instances:
@@ -850,17 +880,14 @@ class MotionPlanningREPL(cmd2.Cmd):
 
 
     def get_all_predecessors(self, task):
-        print(f'all predecessors: {task["name"]}')
-        if task['name'] == 'snippet:0':
-            for t in [ i['producer'] for i in task.get('inputs', [])]:
-                print(f'{t["name"]}: {t["hash"][:8]}')
-        return sorted([ i['producer'] for i in task.get('inputs', [])], key=lambda x: f'{x["name"]}{x.get("index", 0)}')
+        return [ i['producer'] for i in task.get('inputs', [])]
 
-    def get_output_hash(self, task, index=None):
+    def get_output_hash(self, task):
+        index = None
+        if index is None and 'hash' in task:
+            return task["hash"]
         def p(msg):
-            if task['name'] != 'snippet:0':
-                return
-            print(f'{msg} {digest.hexdigest().encode("utf-8")[:8]}')
+            pass
 
 #        print(f'[bold red]Getting output hash for {task["name"]} @ {index}[/]')
         digest = hashlib.sha256()
@@ -886,28 +913,34 @@ class MotionPlanningREPL(cmd2.Cmd):
         digest.update(task['image'].encode('utf-8') )
         p('IMG')
 
+        # for t in self.get_all_predecessors(task):
+        #     print(t["name"])
+        #     assert 'hash' in t
+
         hashes = [t['hash'] for t in self.get_all_predecessors(task)]
-        if task['name'] == 'snippet:0':
-            print(hashes)
+
+#        if task['name'] == 'snippet:0':
+#            print(hashes)
         for i, hash in enumerate(hashes):
             digest.update(hash)
             if task['name'] == 'snippet:0':
                 p(f'IN{i}')
         p('INP')
         hash = digest.hexdigest().encode('utf-8')
-        task['hash'] = hash
+        if index is None:
+            task['hash'] = hash
         return hash
 
     def record_asset(self, task, result):
         task_index = task.get('index')
-        hash = self.get_output_hash(task, task_index)
-        if task['name'] == 'snippet:0':
-            print(f'Storing at hash {hash}, index {task_index}')
+        hash = self.get_output_hash(task)
+#        if task['name'] == 'snippet:0':
+#            print(f'Storing at hash {hash}')
 #        print(f'recording {hash[:8]} for {task["name"]}.{task.get("index","all")} {task.get("config")}: {result}')
         self.cas.put(hash, result)
-        if isinstance(result, list):
-            for i, el in enumerate(result):
-                self.cas.put(self.get_output_hash(task, i), el)
+        # if isinstance(result, list):
+        #     for i, el in enumerate(result):
+        #         self.cas.put(self.get_output_hash(task, i), el)
 
     def commit_for_persona(self, persona):
         return f'{persona[0]}{self.personas[persona]["commit"]}'
