@@ -1,0 +1,45 @@
+name: ab-experiment
+kind: group
+
+components:
+  - name: eval-mp
+    kind: include
+    source: eval.yaml
+
+  - name: eval-pr
+    kind: include
+    source: eval.yaml
+    parameters:
+      - snippet.config.sfl: 42
+      - m1-training.image: 'pr'
+      - m2-training.image: 'pr'
+
+  - name: m1-digest
+    kind: task
+    implementation: task_m1_digest
+    inputs:
+      - name: result_pr
+        reference: eval-pr.m1-eval.result
+        value_type: result
+      - name: result_mp
+        reference: eval-mp.m1-eval.result
+        value_type: result
+    image: mp
+    outputs:
+      - name: digest
+        value_type: digest
+
+  - name: m2-digest
+    kind: task
+    implementation: task_m2_digest
+    inputs:
+      - name: result_pr
+        reference: eval-pr.m2-eval.result
+        value_type: result
+      - name: result_mp
+        reference: eval-mp.m2-eval.result
+        value_type: result
+    image: mp
+    outputs:
+      - name: digest
+        value_type: digest

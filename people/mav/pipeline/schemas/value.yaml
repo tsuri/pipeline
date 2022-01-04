@@ -1,0 +1,4 @@
+type: object
+oneOf:
+  - $ref: schema:people/mav/pipeline/schemas/vector.yaml
+  - $ref: schema:people/mav/pipeline/schemas/atomic_value.yaml

@@ -1,0 +1,19 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "aurora.tech/planning/component",
+    "$title": "component",
+    "$comment": "An object that serves as a component: a task, a group or an import.",
+
+    "type": "object",
+    "oneOf": [
+        {
+            "$ref": "schema:people/mav/pipeline/schemas/group.json"
+        },
+        {
+            "$ref": "schema:people/mav/pipeline/schemas/task.json"
+        },
+        {
+            "$ref": "schema:people/mav/pipeline/schemas/include.json"
+        }
+    ]
+}

@@ -1,0 +1,11 @@
+properties:
+  kind:
+    const: include
+  name:
+    type: string
+  source:
+    type: string
+  overrides:
+    type: object
+
+additionalProperties: false

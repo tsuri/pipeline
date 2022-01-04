@@ -1,0 +1,4 @@
+oneOf:
+  - $ref: schema:people/mav/pipeline/schemas/group.yaml
+  - $ref: schema:people/mav/pipeline/schemas/task.yaml
+  - $ref: schema:people/mav/pipeline/schemas/include.yaml

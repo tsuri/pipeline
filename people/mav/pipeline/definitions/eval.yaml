@@ -1,0 +1,158 @@
+name: eval
+kind: group
+
+components:
+  # generate the labelled snippet for a run
+  # the task is marked volatile as the set of labels is controlled externally
+  # and the same label set (say 'gold') can contain different labels
+  # so we need to run it every time
+  - name: generate
+    kind: task
+    volatile: true
+    image: mp
+    config:
+      labels: gold
+    implementation: task_generate
+    outputs:
+      - name: out
+        arity: _
+        value_type: snippet_def
+
+  # process a snippet
+  - name: snippet
+    kind: task
+    implementation: task_snippet
+    image: mp
+    config:
+      sfl: default
+    inputs:
+      - name: snippet
+        value_type: snippet_def
+        reference: generate.out
+    outputs:
+      - name: out
+        value_type: log
+
+  # extract table T1
+  - name: t1-extract
+    kind: task
+    implementation: task_t1_extract
+    image: mp
+    config:
+      extract: default
+    inputs:
+      - name: log
+        value_type: log
+        reference: snippet.out
+    outputs:
+      - name: table
+        value_type: t1_table
+
+  # extract table T2
+  - name: t2-extract
+    kind: task
+    implementation: task_t2_extract
+    image: mp
+    config:
+      extract: default
+    inputs:
+      - name: log
+        value_type: log
+        reference: snippet.out
+    outputs:
+      - name: table
+        value_type: t2_table
+
+  # aggregate table T1
+  - name: t1-aggregate
+    kind: task
+    implementation: task_t1_aggregate
+    image: mp
+    config:
+      aggregate: default
+    inputs:
+      - name: table
+        arity: _
+        value_type: t1_table
+        reference: t1-extract.table
+    outputs:
+      - name: table
+        value_type: t1_table
+
+  # extract table T2
+  - name: t2-aggregate
+    kind: task
+    implementation: task_t2_aggregate
+    image: mp
+    config:
+      aggregate: default
+    inputs:
+      - name: table
+        arity: _
+        value_type: t2_table
+        reference: t2-extract.table
+    outputs:
+      - name: table
+        value_type: t2_table
+
+  - name: m1-training
+    kind: task
+    implementation: task_m1_training
+    image: mp
+    config:
+      training: default
+    inputs:
+      - name: table
+        value_type: t1_table
+        reference: t1-aggregate.table
+    outputs:
+      - name: model
+        value_type: m1_model
+
+  - name: m2-training
+    kind: task
+    implementation: task_m2_training
+    image: mp
+    config:
+      training: default
+    inputs:
+      - name: table
+        value_type: t2_table
+        reference: t2-aggregate.table
+    outputs:
+      - name: model
+        value_type: m2_model
+
+  - name: m1-eval
+    kind: task
+    implementation: task_m1_eval
+    image: mp
+    config:
+      training: default
+    inputs:
+      - name: model
+        value_type: m1_model
+        reference: m1-training.model
+      - name: table
+        value_type: t1_table
+        reference: t1-aggregate.table
+    outputs:
+      - name: result
+        value_type: result
+
+  - name: m2-eval
+    kind: task
+    implementation: task_m2_eval
+    image: mp
+    config:
+      training: default
+    inputs:
+      - name: model
+        value_type: m2_model
+        reference: m2-training.model
+      - name: table
+        value_type: t2_table
+        reference: t2-aggregate.table
+    outputs:
+      - name: result
+        value_type: result

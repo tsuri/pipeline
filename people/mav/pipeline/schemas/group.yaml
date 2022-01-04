@@ -1,0 +1,26 @@
+type: object
+required:
+  - name
+  - kind
+properties:
+  kind:
+    constant: group
+  name:
+    type: string
+    pattern: ^[a-z][a-z-]*$
+  # inputs:
+  #   type: array
+  #   items:
+  #     $ref: schema:people/mav/pipeline/schemas/asset.yaml
+  # outputs:
+  #   type: array
+  #   items:
+  #     $ref: schema:people/mav/pipeline/schemas/asset.yaml
+  config:
+    type: object
+  components:
+    type: array
+    items:
+      $ref: schema:people/mav/pipeline/schemas/component.yaml
+
+additionalProperties: false

@@ -1,0 +1,48 @@
+L1:
+  tags:
+  - train
+  - c1
+  - gold
+  labels:
+  - lc
+
+L2:
+  tags:
+  - train
+  - c1
+  - gold
+  labels:
+  - lc
+  - y
+
+L3:
+  tags:
+  - train
+  - c2
+  - gold
+  labels:
+  - lc
+
+L4:
+  tags:
+  - train
+  - c2
+  - gold
+  labels:
+  - lc
+
+L5:
+  tags:
+  - test
+  - c1
+  - gold
+  labels:
+  - lc
+
+L6:
+  tags:
+  - test
+  - c2
+  - gold
+  labels:
+  - lc

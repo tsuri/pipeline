@@ -1,0 +1,6 @@
+install:
+
+apt: libgraphviz-dev
+pip: pygraphviz
+
+Drawing for 'machine learning training pipeline' https://pixray.gob.io/text2pixel/

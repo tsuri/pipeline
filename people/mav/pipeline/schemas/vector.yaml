@@ -1,0 +1,16 @@
+type: object
+required:
+  - name
+  - arity
+  - value_type
+properties:
+  name:
+    type: string
+  arity:
+    type: string
+  value_type:
+    type: string
+  reference:
+    type: string
+
+additionalProperties: false

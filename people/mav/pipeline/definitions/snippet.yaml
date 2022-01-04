@@ -1,0 +1,38 @@
+name: snippet
+kind: group
+
+components:
+  - name: sfl
+    kind: task
+    image: mp
+    implementation: task_sfl
+    inputs:
+      - name: snippet
+        value_type: snippet_def
+    outputs:
+      - name: out
+        value_type: sim_def
+
+  - name: sim
+    kind: task
+    image: mp
+    implementation: task_sim
+    inputs:
+      - name: sim_def
+        value_type: sim_def
+        reference: sfl.out
+    outputs:
+      - name: log
+        value_type: log
+
+  - name: autolabeler
+    kind: task
+    image: mp
+    implementation: task_autolabeler
+    inputs:
+      - name: log
+        value_type: log
+        reference: sim.log
+    outputs:
+      - name: log
+        value_type: log

@@ -1,0 +1,27 @@
+type: object
+required:
+  - name
+  - kind
+properties:
+  kind:
+    constant: task
+  name:
+    type: string
+  volatile:
+    type: boolean
+  image:
+    type: string
+  inputs:
+    type: array
+    items:
+      $ref: schema:people/mav/pipeline/schemas/value.yaml
+  outputs:
+    type: array
+    items:
+      $ref: schema:people/mav/pipeline/schemas/value.yaml
+  implementation:
+    type: string
+  config:
+    type: object
+
+additionalProperties: false
