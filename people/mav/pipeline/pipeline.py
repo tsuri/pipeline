@@ -846,7 +846,7 @@ class MotionPlanningREPL(cmd2.Cmd):
             # TODO fix input-output dependencies, must be on i-th task
             deferred_task_names = [t["name"] for t in deferred_tasks["tasks"]]
             deferred_task_instances = []
-
+            scheduled_deferred_tasks = []
             fanin = deferred_tasks["notify"]
             fanin_inputs = fanin['inputs']
             assert len(fanin_inputs) == 1
@@ -861,15 +861,21 @@ class MotionPlanningREPL(cmd2.Cmd):
                 for task in deferred_tasks["tasks"]:
                     t = copy.deepcopy(task)
                     t['index'] = i
-                    deferred_task_instances.append(t)
                     t['name'] = f'{t["name"]}:{i}'
+                    # we always store here, otherwise the code needs to be rewrittem
+                    deferred_task_instances.append(t)
                     for input in t.get("inputs"):
                         o = input['reference'].rsplit('.',2)
                         if o[1] in deferred_task_names:
                             o[1]=f'{o[1]}:{i}'
                             input['producer'] = deferred_task_instances[-2]
                         input['reference'] = '.'.join(o)
-                    self.schedule_task(t)
+                    if self.cas.get(self.get_output_hash(t)) is None:
+                        self.schedule_task(t)
+                if self.cas.get(self.get_output_hash(deferred_task_instances[-1])) is None:
+                    scheduled_deferred_tasks.append(deferred_task_instances[-1])
+
+#                        print(f'COULD SKIPP SCHEDULING {t["name"]}')
                 # here the last in deferred_task_instances is the provicer for the task that needs to be notfied
                 # we assume that guy has one input (of open arity) and we replace ir with all expansions here
                 new_input = copy.deepcopy(fanin_input_template)
@@ -878,9 +884,11 @@ class MotionPlanningREPL(cmd2.Cmd):
                 fanin['inputs'].append(new_input)
 #                print(f'**** {fanin["name"]} inputs: {[(i["name"], i["producer"]["name"]) for i in fanin["inputs"]]}')
 #            print(f'--- [bold red] {len(fanin["inputs"])} [/] {fanin["inputs"]} [green] {fanin["inputs"][0].keys()} [/] ---')
-            print(f':calendar: Adding blockers for {deferred_tasks["notify"]["name"]}: {deferred_tasks["tasks"][-1]["name"]}:0..{len(result)-1}')
+            print(f':calendar: Adding blockers for {deferred_tasks["notify"]["name"]}: {", ".join([t["name"] for t in scheduled_deferred_tasks])}')
             for t in deferred_task_instances:
-                self.run_task(t)
+                if self.cas.get(self.get_output_hash(t)) is None:
+#                    print(f'COULD SKIPP SCHEDULING {t["name"]}')
+                    self.run_task(t)
 
 #            print(deferred_tasks.keys())
         if task_name is None:
@@ -1155,6 +1163,9 @@ class MotionPlanningREPL(cmd2.Cmd):
         """Get a MP artefact."""
         target = args.target
         meta = args.meta
+
+        self.load_labels()
+        print(self.labels)
 
         # we have a convention that the filename is EL.yaml where EL is the
         # first iem in the target. This is only for demo/autocompletion purposes
