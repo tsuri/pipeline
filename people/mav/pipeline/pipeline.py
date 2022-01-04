@@ -100,8 +100,10 @@ def is_fanout(component):
     return open_arity(component.get('outputs', []))
 
 def is_fanin(component):
-    print(f'**** is_fanin inputs: {component.get("inputs", [])}')
-    return open_arity(component.get('inputs', []))
+    print(f'**** is_fanin inputs: {[(i["name"], i.get("arity")) for i in component.get("inputs", [])]}')
+    # the following are both needed as inputs on fanin docuemnts are modified, when we do we leave a flag
+    # to say that the component is a  fanin point
+    return component.get("fanin", open_arity(component.get('inputs', [])))
 
 def is_group(component):
     return get_kind(component) == "group"
@@ -611,19 +613,22 @@ class MotionPlanningREPL(cmd2.Cmd):
         return result
 
     def task_t1_aggregate(self, config, table):
-        result = f'Aggregated {table}'
+        # for t in table:
+        #     print(f'===== {t} =====')
+
+        result = { "kind": "table", "source": [t["source"] for t in table] }
         return result
 
     def task_t2_aggregate(self, config, table):
-        result = 'Aggregated T2'
+        result = { "kind": "table", "source": [t["source"] for t in table] }
         return result
 
     def task_m1_training(self, config, table):
-        result = "A shiny M1 model"
+        result = { "kind": "model", "type": "M1" }
         return result
 
     def task_m2_training(self, config, table):
-        result = "A shiny M2 model"
+        result = { "kind": "model", "type": "M2" }
         return result
 
     def task_m1_eval(self, config, model, table):
@@ -790,10 +795,13 @@ class MotionPlanningREPL(cmd2.Cmd):
             if is_fanout(producer) is not None:
                 inputs[input["name"]] = input_value[task_index]
             else:
-                print(f'**** {task["name"]} is_fanin: {is_fanin(task)}')
-                if is_fanin(task) is not None:
-                    print(f'**** APPENDING {inputs[input["name"]]}')
-                    inputs[input["name"]].append(input_value)
+#                print(f'**** {task["name"]} is_fanin: {is_fanin(task)}')
+                if task.get('fanin', False):
+#                    print(f'**** APPENDING {inputs[input["name"]]}')
+                    if input["name"] in inputs:
+                        inputs[input["name"]].append(input_value)
+                    else:
+                        inputs[input["name"]] = [input_value]
                 else:
                     inputs[input["name"]] = input_value
 #        print(inputs)
@@ -809,11 +817,11 @@ class MotionPlanningREPL(cmd2.Cmd):
         config = task.get("config")
 
         inputs = self.get_task_inputs(task)
-        if task["name"] == "t1-aggregate":
-            print('------')
-            print(task['name'])
-            print(inputs)
-            print('------')
+        # if task["name"] == "t1-aggregate":
+        #     print('------')
+        #     print(task['name'])
+        #     print(inputs)
+        #     print('------')
 
 #        if task['name'] == 'snippet:0':
 #            print(f'Here, we look for a run with hash {output_hash}, index: {task_index}')
@@ -844,6 +852,7 @@ class MotionPlanningREPL(cmd2.Cmd):
             assert len(fanin_inputs) == 1
             fanin_input_template = copy.deepcopy(fanin_inputs[0])
             fanin['inputs'] = []
+            fanin['fanin'] = True
             del fanin_input_template['arity']
 
             for i, r in enumerate(result):
@@ -867,7 +876,7 @@ class MotionPlanningREPL(cmd2.Cmd):
                 new_input['producer'] = deferred_task_instances[-1]
                 new_input['reference'] = None # complicated to set here and we probably don't need it either
                 fanin['inputs'].append(new_input)
-                print(f'**** {fanin["name"]} inputs: {[(i["name"], i["producer"]["name"]) for i in fanin["inputs"]]}')
+#                print(f'**** {fanin["name"]} inputs: {[(i["name"], i["producer"]["name"]) for i in fanin["inputs"]]}')
 #            print(f'--- [bold red] {len(fanin["inputs"])} [/] {fanin["inputs"]} [green] {fanin["inputs"][0].keys()} [/] ---')
             print(f':calendar: Adding blockers for {deferred_tasks["notify"]["name"]}: {deferred_tasks["tasks"][-1]["name"]}:0..{len(result)-1}')
             for t in deferred_task_instances:
