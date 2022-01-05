@@ -9,6 +9,7 @@ import os
 import hashlib
 import pprint
 import shutil
+import re
 import sys
 import time
 import yaml
@@ -100,7 +101,7 @@ def is_fanout(component):
     return open_arity(component.get('outputs', []))
 
 def is_fanin(component):
-    print(f'**** is_fanin inputs: {[(i["name"], i.get("arity")) for i in component.get("inputs", [])]}')
+#    print(f'**** is_fanin inputs: {[(i["name"], i.get("arity")) for i in component.get("inputs", [])]}')
     # the following are both needed as inputs on fanin docuemnts are modified, when we do we leave a flag
     # to say that the component is a  fanin point
     return component.get("fanin", open_arity(component.get('inputs', [])))
@@ -344,6 +345,7 @@ def path_complete(
     ):
     root_dir = f'repo/{self.persona}/head'
     matches = glob.glob(f"{text}*.yaml", root_dir=root_dir)
+    matches += ['labels.yaml']
     return matches
 
 def component_targets(component):
@@ -498,6 +500,25 @@ class MotionPlanningREPL(cmd2.Cmd):
 #        self.cache_stats()
 
         self.register_precmd_hook(self.precommand_hook)
+#        self.register_postparsing_hook(self.postparsing_hook)
+
+    # def postparsing_hook(self, params: cmd2.plugin.PostparsingData) -> cmd2.plugin.PostparsingData:
+    #     print(params.statement.raw)
+    #     # if 'as' in params.statement.raw:
+    #     #     newinput = params.statement.raw + ' | less'
+    #     params.statement = self.statement_parser.parse("labels_list")
+    #     return params
+
+    # as_parser = cmd2.Cmd2ArgumentParser()
+    # as_parser.add_argument(
+    #     'user', nargs=argparse.OPTIONAL, help="The user we want to run as" , choices = self.personas.keys()
+    # )
+    # get_parser.add_argument(
+    #     'cmd', nargs=argparse.OPTIONAL, help="The command" ,
+    # )
+    # @cmd2.with_argparser(get_parser)
+    # def do_as(self, args):
+    #     pass
 
     def intro_hook(self) -> None:
         col = [
@@ -509,8 +530,6 @@ class MotionPlanningREPL(cmd2.Cmd):
             'bold orange3'
         ]
         intro = f"""
-[bright]Welcome to the Motion Planning shell.[/] Type 'help' to list commands.
-<TAB> or '?' will autocomplete commands.
 
 [{col[0]}] __  __  _____  ____  ____  _____  _  _    ____  __      __    _  _  _  _  ____  _  _  ___
 [{col[1]}](  \/  )(  _  )(_  _)(_  _)(  _  )( \( )  (  _ \(  )    /__\  ( \( )( \( )(_  _)( \( )/ __)
@@ -518,18 +537,12 @@ class MotionPlanningREPL(cmd2.Cmd):
 [{col[3]}](_/\/\_)(_____) (__) (____)(_____)(_)\_)  (__)  (____)(__)(__)(_)\_)(_)\_)(____)(_)\_)\___/
 
 [{col[4]}]B O L D L Y   T R A I N I N G    M O D E L S    N O B O D Y    T R A I N E D    B E F O R E[/]
-\n"""
-#         intro = """Welcome to the Motion Planning shell. Type 'help' to list commands.
-# <TAB> or '?' will autocomplete commands.
 
-#  __  __  _____  ____  ____  _____  _  _    ____  __      __    _  _  _  _  ____  _  _  ___
-# (  \/  )(  _  )(_  _)(_  _)(  _  )( \( )  (  _ \(  )    /__\  ( \( )( \( )(_  _)( \( )/ __)
-#  )    (  )(_)(   )(   _)(_  )(_)(  )  (    )___/ )(__  /(__)\  )  (  )  (  _)(_  )  (( (_-.
-# (_/\/\_)(_____) (__) (____)(_____)(_)\_)  (__)  (____)(__)(__)(_)\_)(_)\_)(____)(_)\_)\___/
+                   :sparkles: [grey69]Welcome to the Motion Planning shell.[/] :sparkles:
 
-# \033[1mB O L D L Y   T R A I N I N G    M O D E L S    N O B O D Y    T R A I N E D    B E F O R E\033[0m
-# \n"""
+[dim cyan]Type 'help' to list commands. <TAB> or '?' will autocomplete commands.[/]
 
+"""
         print(intro)
         return
 
@@ -540,6 +553,8 @@ class MotionPlanningREPL(cmd2.Cmd):
 #            log.setLevel("DEBUG")
             log.setLevel("TRACE")
 
+        self.load_labels()
+
         # the statement object created from the user input
         # is available as data.statement
         return data
@@ -548,47 +563,24 @@ class MotionPlanningREPL(cmd2.Cmd):
         shutil.copytree(f'repo/{persona}/head', f'repo/{persona}/{self.personas[persona]["commit"]}')
 
     def load_labels(self):
-        # self.labels = {
-        #     "L1": {
-        #         "tags": ["train", "c1", "gold"],
-        #         "labels": ["lc"],
-        #     },
-        #     "L2": {
-        #         "tags": ["train", "c1", "gold"],
-        #         "labels": ["lc","y"],
-        #     },
-        #     "L3": {
-        #         "tags": ["train", "c2", "gold"],
-        #         "labels": ["lc"],
-        #    },
-        #     "L4": {
-        #         "tags": ["train", "c2", "gold"],
-        #         "labels": ["lc"],
-        #     },
-        #     "L5": {
-        #         "tags": ["test", "c1", "gold"],
-        #         "labels": ["lc"],
-        #     },
-        #     "L6": {
-        #         "tags": ["test", "c2", "gold"],
-        #         "labels": ["lc"],
-        #     }
-        # }
-
-        with open('people/mav/pipeline/labels.yaml', "r") as f:
+        label_file = f'repo/{self.persona}/{self.personas[self.persona]["commit"]}/globals/labels.yaml'
+#        with open('people/mav/pipeline/labels.yaml', "r") as f:
+        with open(label_file, "r") as f:
             self.labels = yaml.safe_load(f)
 
     def reset_state(self):
-        self.load_labels()
         self.images = {}
         self.cas.reset()
         if os.path.isdir('repo'):
             shutil.rmtree('repo')
         for p in self.personas.keys():
-            os.makedirs(f'repo/{p}')
+            os.makedirs(f'repo/{p}', exist_ok=True)
             shutil.copytree('people/mav/pipeline/definitions', f'repo/{p}/head')
+            os.makedirs(f'repo/{p}/head/globals', exist_ok=True)
+            shutil.copyfile('people/mav/pipeline/labels.yaml', f'repo/{p}/head/globals/labels.yaml')
             self.personas[p]["commit"] = 1
             self.commit_head(p)
+        self.load_labels()
 
     # TASKS
     def task_generate(self, config):
@@ -657,8 +649,12 @@ class MotionPlanningREPL(cmd2.Cmd):
     def do_edit(self, args: argparse.Namespace) -> None:
         """Run a text editor and optionally open a file with it"""
 
+        dir_path = f"repo/{self.persona}/head/"
+        file_path = args.file_path
+        if file_path == 'labels.yaml':
+            dir_path = dir_path + '/globals/'
         # self.last_result will be set by do_shell() which is called by run_editor()
-        self.run_editor(f"repo/{self.persona}/head/" + args.file_path)
+        self.run_editor(dir_path + file_path)
 
 
     # become_parser.set_defaults(func=become)
@@ -667,13 +663,23 @@ class MotionPlanningREPL(cmd2.Cmd):
     def do_labels_list(self, args):
         global console
 
+        def color_tag(tag):
+            if tag == 'gold':
+                return '[gold1]gold[/]'
+            elif tag == 'train':
+                return '[plum2]train[/]'
+            elif tag == 'test':
+                return '[light_slate_blue]test[/]'
+            else:
+                return tag
+
         table = Table(title = 'Labels', show_header=True, header_style="bold magenta", box=box.SIMPLE_HEAVY)
         table.add_column("ID", style="dim", width=12)
         table.add_column("tags")
         table.add_column("labels")
 
-        for id, l in self.labels.items():
-            table.add_row(id, ", ".join(l['tags']), ", ".join(l['labels']))
+        for id, l in sorted(self.labels.items()):
+            table.add_row(id, ", ".join([color_tag(t) for t in l['tags']]), ", ".join(l['labels']))
 
         console.print(table)
 
@@ -773,13 +779,6 @@ class MotionPlanningREPL(cmd2.Cmd):
     def describe_plan(self, plan, target):
         pass
 
-    def need_run(self, task, config, inputs):
-        if task.get('volatile'):
-            return True
-
-        # TODO do the proper thing
-        return True
-
     def get_task_inputs(self, task):
 #        print('-- getting inputs --')
 
@@ -826,9 +825,13 @@ class MotionPlanningREPL(cmd2.Cmd):
 #        if task['name'] == 'snippet:0':
 #            print(f'Here, we look for a run with hash {output_hash}, index: {task_index}')
 
+                    # if isinstance(result, list):
+        #     for i, el in enumerate(result):
+        #         self.cas.put(self.get_output_hash(task, i), el)
+
         result = self.cas.get(output_hash)
         if task.get('volatile', False) or result is None:
-            print(f':running: running [bold blue]{task["name"]}[/] {output_hash}')
+            print(f':running: running [bold blue]{task["name"]}[/]')
             implementation = getattr(MotionPlanningREPL, task_name)
             args = {k: None for k in list(inspect.signature(implementation).parameters.keys())[2:]} # skp self and config
             assert args.keys() == inputs.keys(), f"Bad arguments for task {args.keys()} - {inputs.keys()}"
@@ -899,65 +902,44 @@ class MotionPlanningREPL(cmd2.Cmd):
     def get_all_predecessors(self, task):
         return [ i['producer'] for i in task.get('inputs', [])]
 
-    def get_output_hash(self, task):
-        index = None
-        if index is None and 'hash' in task:
+    def get_output_hash(self, task, value=None):
+        if 'hash' in task:
             return task["hash"]
-        def p(msg):
-            pass
 
-#        print(f'[bold red]Getting output hash for {task["name"]} @ {index}[/]')
         digest = hashlib.sha256()
         task_name = task["name"]
         task_config = task.get("config", {})
 
-        # # this is the index of this task, the optional 'index' parameter is for fanout
-        # # when you want a single element out of the vector
-        # task_index = task.get('index')
-        # if task_index:
-        #     digest.update(str(task_index).encode('utf-8'))
+        # we don't pass vaue any more
+        if value is not None:
+            digest.update(str(value).encode('utf-8'))
 
-        if index is not None:
-            digest.update(str(index).encode('utf-8'))
-        p('IDX')
+
+        if task['name'] == "generate":
+            digest.update(str(self.labels.items()).encode('utf-8'))
+
         for k,v in sorted(task_config.items()):
             digest.update(k.encode('utf-8'))
             digest.update(str(v).encode('utf-8'))
-        p('CFG')
 
         digest.update(task_name.encode('utf-8') )
-        p('NAM')
         digest.update(task['image'].encode('utf-8') )
-        p('IMG')
-
-        # for t in self.get_all_predecessors(task):
-        #     print(t["name"])
-        #     assert 'hash' in t
 
         hashes = [t['hash'] for t in self.get_all_predecessors(task)]
 
-#        if task['name'] == 'snippet:0':
-#            print(hashes)
         for i, hash in enumerate(hashes):
             digest.update(hash)
-            if task['name'] == 'snippet:0':
-                p(f'IN{i}')
-        p('INP')
         hash = digest.hexdigest().encode('utf-8')
-        if index is None:
-            task['hash'] = hash
+
+        task['hash'] = hash
         return hash
 
     def record_asset(self, task, result):
         task_index = task.get('index')
-        hash = self.get_output_hash(task)
-#        if task['name'] == 'snippet:0':
-#            print(f'Storing at hash {hash}')
-#        print(f'recording {hash[:8]} for {task["name"]}.{task.get("index","all")} {task.get("config")}: {result}')
+        hash = self.get_output_hash(task, result)
+        if task['name'] == 'generate':
+            print(f'Storing at hash {hash}')
         self.cas.put(hash, result)
-        # if isinstance(result, list):
-        #     for i, el in enumerate(result):
-        #         self.cas.put(self.get_output_hash(task, i), el)
 
     def commit_for_persona(self, persona):
         return f'{persona[0]}{self.personas[persona]["commit"]}'
@@ -1066,7 +1048,7 @@ class MotionPlanningREPL(cmd2.Cmd):
             status = f':hourglass: blocked on: {color}{", ".join(blockers)}[/]'
         else:
             status = ':zap: ready to run'
-        print(f':calendar: Scheduling task {task["name"]} {status}')
+        print(f':calendar: Scheduling task [bold blue]{task["name"]}[/] {status}')
 
     # def is_fanout(self, component):
     #     for o in component.get('outputs', []):
@@ -1165,7 +1147,6 @@ class MotionPlanningREPL(cmd2.Cmd):
         meta = args.meta
 
         self.load_labels()
-        print(self.labels)
 
         # we have a convention that the filename is EL.yaml where EL is the
         # first iem in the target. This is only for demo/autocompletion purposes
@@ -1208,8 +1189,8 @@ class MotionPlanningREPL(cmd2.Cmd):
  #       console.print(Rule())
         g = self.task_graph(definition)
 
-        tasks = list(nx.topological_sort(g))
-        pretty.pprint(tasks)
+#        tasks = list(nx.topological_sort(g))
+#        pretty.pprint(tasks)
 
         self.fix_fan(g)
         if meta == 'schedule':
